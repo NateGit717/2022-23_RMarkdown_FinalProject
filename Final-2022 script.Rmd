@@ -1,0 +1,151 @@
+---
+title: "Final Assignment 2022"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(dplyr)
+library(ggplot2)
+library(tree)
+library(randomForest)
+library(factoextra)
+library(cluster)
+```
+
+## Introduction
+This Notebook will perform analysis on the provided Insurance data set by constructing four different models. 
+
+### Data Preparation
+The following chunk will load and prepare the data set. The charges column will be log transformed to reduce the effect of wickedness and extremely high/low values. 
+```{r}
+Insurance <- read.csv("C:/Users/Nate/Documents/R data/insurance.csv")
+Insurance$log_charges <- log(Insurance$charges)
+
+set.seed(111) 
+index <-  sample(1:nrow(Insurance), nrow(Insurance)*0.70)
+train <- Insurance[index,]
+test <- Insurance[-index,]
+```
+
+### Multiple Regression Model
+The following chunk will construct the linear model to predict the log transformed charges.
+```{r}
+Linear_Charges <- lm(log_charges ~ age + sex + bmi + children + smoker + region, data = train)
+summary(Linear_Charges)
+```
+There does seem to be a strong relationship between most of the predictors and the response. The only predictor that is not statistically significant is regionnorthwest according to our p value.
+
+Sex does seem to have a statistically significant relationship to the response. However, with the exception of regionnorthwest, it is the least significant predictor of them all according to the p value.
+
+The following chunk generates a graphic to examine the distribution of the error between the predicted and actuall charges.
+```{r}
+test$predLogcharges <- predict(Linear_Charges, newdata = test)
+
+test %>%
+  ggplot(aes(x = predLogcharges, y = predLogcharges-log_charges)) +
+  geom_point(alpha=0.2,color="black") +
+  labs(y = "Residue", title = "Residual Plot")
+
+```
+
+Looking at the graph above it seems that there may be significant relationships between the predictor variables given that the points trend into two clear curves. 
+
+The following chunk calculates the RMSE of the multiple linear regression model.
+```{r}
+mlr.RMSE <- round(sqrt(mean(test$log_charges - test$predLogcharges)^2),4)
+print(mlr.RMSE)
+```
+
+The RMSE value for the test set using the regression models seems fairly low, which would indicate that our model fits the data pretty well.
+
+### Regression Tree Model
+The following chunk creates the decision tree model predicting the log_charges.
+```{r}
+tree_Insurance <-  tree(log_charges ~ age + sex + bmi + children + smoker + region, data = train)
+summary(tree_Insurance)
+cv.Insurance = cv.tree(tree_Insurance)
+```
+
+The following chunk will generate a graphic to determine the appropriate amount of clusters.
+```{r}
+plot(cv.Insurance$size, cv.Insurance$dev, ttpe = 'b')
+```
+
+It looks like the ideal amount of clusters is 2 or 3. For this assignment I will be using 3.
+
+The following chunk will generate a tree model graphic.
+```{r}
+prune.Insurance = prune.tree(tree_Insurance, best = 3)
+plot(prune.Insurance)
+text(prune.Insurance, pretty=0)
+```
+
+The following chunk calculates the test RMSE of the decision tree model.
+```{r}
+yhat = predict(prune.Insurance, newdata = test)
+Insurance.test = test[, "log_charges"]
+rt.RMSE <- round(sqrt(mean(yhat - Insurance.test)^2),4)
+print(rt.RMSE)
+```
+
+Here We can see that the RMSE for the tree model is also fairly small, but not quite as small as the multiple regression model. I think this model could still work, but not as well as the multiple regression model.
+
+### Random Forest Model
+The following chunk constructs the random forest model as well as the RMSE for the Insurance data set.
+```{r}
+rf.logcharges <- randomForest(log_charges ~ age + sex + bmi + children + smoker + region, data = train, importance = TRUE)
+yhat.rf = predict(rf.logcharges, newdata = test)
+logcharges.rf.test = test[, "log_charges"]
+rf.RMSE <- round(sqrt(mean(yhat.rf-logcharges.rf.test)^2),4)
+print(rf.RMSE)
+```
+
+The RMSE for the forest model is the lowest so far.
+
+The following chunks calculate the importance of the random forest model.
+```{r}
+importance(rf.logcharges)
+varImpPlot(rf.logcharges)
+```
+
+Looking at the importance of the predictors, it seems that smoker and age are the most important, with a bit of a toss-up between children and bmi. Children is greater than bmi when looking at MSE and bmi is greater when looking at purity. Since I need to pick one, I would say the bmi is more important, since it is more significantly greater in purity than it is smaller in MSE. 
+
+### K-Means Cluster
+The following chunk constructs the k-means cluster data set and a graphic to determine the amount of clusters using the elbow test.
+```{r}
+InsuranceNum <- Insurance %>% dplyr::select(where(is.numeric))
+fviz_nbclust(InsuranceNum, kmeans, method = "wss")
+```
+
+Using the elbow method, the within sum of squares starts leveling off after 3 or 4, so I will be using 3 clusters for our analysis.
+```{r}
+km.ins <- kmeans(InsuranceNum, 3, nstart = 25)
+fviz_cluster(km.ins, data = InsuranceNum, pointsize = 0.6, labelsize = 7, ellipse.alpha = 0.6)
+```
+
+Above we can see that the data is, more of less, evenly split into 3 sections.
+
+### Putting it All Together
+The following chunk will create a data frame comparing the RMSEs of the previous models to determine the best model for the Insurance data set.
+```{r}
+df.RMSE <- data.frame(Model.Type = c("Multiple Linear Regression", "Regression Tree", "Random Forest"), Test.MSE = c(mlr.RMSE, rt.RMSE, rf.RMSE))
+print(df.RMSE)
+```
+
+Judging by the test RMSE values, it would seem that the random forest model is the best for this data set. It is worth noting that different seeds for the separation of the training and test sets does noticeably change the RMSE values (which is not all that surprising). However in virtually all of the seeds, the random forest model seems to have the lowest RMSE test value followed by the multiple linear regression model.
+
+One of the benefits of the random forest model is first and foremost that in this case it has the lowest RMSE. next is that it is generally a better predictor than the regression tree model and are more efficient at bagging trees. 
+
+The following chunk will "untransform" the predicted log_charges values from our decision tree model by taking the exponential of the yval.
+```{r}
+Insurance_Exp <- prune.Insurance
+Insurance_Exp$frame$yval <- exp(Insurance_Exp$frame$yval)
+plot(Insurance_Exp)
+text(Insurance_Exp, pretty=0)
+```
+
+Above is the exponential transform of the yvals of the decision tree model.
+
+
