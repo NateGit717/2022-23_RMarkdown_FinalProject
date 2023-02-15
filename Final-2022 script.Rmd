@@ -6,6 +6,7 @@ date: "`r Sys.Date()`"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(readr)
 library(dplyr)
 library(ggplot2)
 library(tree)
@@ -20,7 +21,7 @@ This Notebook will perform analysis on the provided Insurance data set by constr
 ### Data Preparation
 The following chunk will load and prepare the data set. The charges column will be log transformed to reduce the effect of wickedness and extremely high/low values. 
 ```{r}
-Insurance <- read.csv("C:/Users/Nate/Documents/R data/insurance.csv")
+Insurance <- read.csv(url("https://raw.githubusercontent.com/NateGit717/RMarkdown_Final/main/insurance.csv"))
 Insurance$log_charges <- log(Insurance$charges)
 
 set.seed(111) 
