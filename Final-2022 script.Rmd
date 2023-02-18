@@ -21,7 +21,7 @@ This Notebook will perform analysis on the provided Insurance data set by constr
 ### Data Preparation
 The following chunk will load and prepare the data set. The charges column will be log transformed to reduce the effect of wickedness and extremely high/low values. 
 ```{r}
-Insurance <- read.csv(url("https://raw.githubusercontent.com/NateGit717/RMarkdown_Final/main/insurance.csv"))
+Insurance <- read.csv(url("https://raw.githubusercontent.com/NateGit717/2022-23_RMarkdown_FinalProject/main/insurance.csv"))
 Insurance$log_charges <- log(Insurance$charges)
 
 set.seed(111) 
